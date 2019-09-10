@@ -44,8 +44,10 @@ public class ConversationRecord {
                     String welcome = "";
                     String query_text = "";
                     String suggest_answer = "";
+                    String clarify_questions = "";
                     String enter_top_node_name = "";
                     String session_id = "";
+                    String source = "";
                     if (currConversation.containsKey("session_id")) {
                         session_id = (String) currConversation.get("session_id");
                     }
@@ -58,16 +60,54 @@ public class ConversationRecord {
                     if (currConversation.containsKey("suggest_answer")) {
                         suggest_answer = currConversation.getString("suggest_answer");
                     }
+                    if (currConversation.containsKey("clarify_questions")) {
+                        JSONObject clarifyQuestions = (JSONObject) currConversation.get("clarify_questions");
+                        JSONObject voice = (JSONObject) clarifyQuestions.get("voice");
+                        String content = voice.getString("content");
+                        clarify_questions = content;
+                    }
                     if (currConversation.containsKey("enter_top_node_name")) {
                         enter_top_node_name = currConversation.getString("enter_top_node_name");
+                    }
+                    //取回复类型
+                    if (currConversation.containsKey("source")) {
+                        source = currConversation.getString("source");
                     }
                     Conversation conversation = new Conversation();
                     conversation.setWelcome(welcome);
                     conversation.setQuery_text(query_text);
-                    conversation.setSuggest_answer(suggest_answer);
+                    //设置回答字段 -- 区别澄清问答
+                    if(!StringUtils.isEmpty(suggest_answer)){
+                        conversation.setSuggest_answer(suggest_answer);
+                    }else if(!StringUtils.isEmpty(clarify_questions)){
+                        conversation.setSuggest_answer(clarify_questions);
+                    }
                     conversation.setTime(currConversation.getString("answer_time"));
                     conversation.setEnter_top_node_name(enter_top_node_name);
                     conversation.setSession_id(session_id);
+                    //转换回复类型
+                    if(!StringUtils.isEmpty(source)){
+                        if("task_based".equals(source)){
+                            source = "多轮会话";
+                        }
+                        if("FAQ".equals(source)){
+                            source = "单轮问答";
+                        }
+                        if("chitchat".equals(source)){
+                            source = "闲聊";
+                        }
+                        if("none".equals(source)){
+                            //子回复类型  -- 建议问
+                            if(!StringUtils.isEmpty(clarify_questions)){
+                                source = "建议问";
+                            }else {
+                                source = "默认回复";
+                            }
+
+                        }
+
+                    }
+                    conversation.setSource(source);
                     conversationList.add(conversation);
                 }
             }
@@ -115,8 +155,9 @@ public class ConversationRecord {
             sheet.setColumnWidth(1, 25 * 256);
             sheet.setColumnWidth(2, 40 * 256);
             sheet.setColumnWidth(3, 25 * 256);
-            sheet.setColumnWidth(4, 40 * 256);
-            sheet.setColumnWidth(5, 220 * 256);
+            sheet.setColumnWidth(4, 25 * 256);
+            sheet.setColumnWidth(5, 10 * 256);
+            sheet.setColumnWidth(6, 220 * 256);
 
             CellStyle style = workbook.createCellStyle();
             style.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
@@ -126,7 +167,8 @@ public class ConversationRecord {
             row.createCell(2).setCellValue("ID");
             row.createCell(3).setCellValue("时间");
             row.createCell(4).setCellValue("客户问题");
-            row.createCell(5).setCellValue("返回答案");
+            row.createCell(5).setCellValue("回复类型");
+            row.createCell(6).setCellValue("返回答案");
             int rowNum = 1;
             int serialNo = 0;
             int outSerialNo = 0;
@@ -156,23 +198,29 @@ public class ConversationRecord {
                         currRow.createCell(2).setCellValue(conversation.getSession_id());
                         currRow.createCell(3).setCellValue(conversation.getTime());
                         currRow.createCell(4).setCellValue("".equals(conversation.getQuery_text())?"":conversation.getQuery_text());
-                        currRow.createCell(5).setCellValue("".equals(conversation.getSuggest_answer())?conversation.getWelcome():conversation.getSuggest_answer());
+                        currRow.createCell(5).setCellValue(conversation.getSource());
+                        currRow.createCell(6).setCellValue("".equals(conversation.getSuggest_answer())?conversation.getWelcome():conversation.getSuggest_answer());
+                        //
                     }
                 }
                 //打印进度条
-                String tu = "*";
+                String tu = "";
                 Integer scheduleNum = (new Double(((outPrintNum*1.0) / (conversationSortList.size())) * 100).intValue());
-                for (Integer j = 0 ; j < scheduleNum/10; j += 1) {
-                    tu += "*";
+                Integer j = 0;
+                for (; j < scheduleNum/5; j += 1) {
+                    tu += "●";
+                }
+                for (; j < 20; j += 1) {
+                    tu += "○";
                 }
                 if(outPrintNum == conversationSortList.size() - 1){
-                    System.out.print("\r日志读取进度：" + 100  + "%\t" + tu + "\t" + conversationSortList.size() + "/" + conversationSortList.size() );
+                    System.out.print("\r读取进度：" + scheduleNum  + "%\t" + "●●●●●●●●●●●●●●●●●●●●" + "\t" + conversationSortList.size() + "/" + conversationSortList.size() );
                 }else {
-                    System.out.print("\r日志读取进度：" + scheduleNum  + "%\t" + tu + "\t" + outPrintNum + "/" + conversationSortList.size());
+                    System.out.print("\r读取进度：" + scheduleNum  + "%\t" + tu + "\t" + outPrintNum + "/" + conversationSortList.size());
                 }
                 outPrintNum ++;
             }
-            System.out.println("\t\t" + "开始写入Excel");
+            System.out.println("\t" + "开始写入Excel");
             FileOutputStream fos = new FileOutputStream("conversation.xlsx");
             workbook.write(fos);
             br.close();
@@ -190,6 +238,7 @@ public class ConversationRecord {
         private String time;
         private String enter_top_node_name;
         private String session_id;
+        private String source;
         private int talkNum;
         public String getSession_id() {
             return session_id;
@@ -246,6 +295,14 @@ public class ConversationRecord {
 
         public void setEnter_top_node_name(String enter_top_node_name) {
             this.enter_top_node_name = enter_top_node_name;
+        }
+
+        public String getSource() {
+            return source;
+        }
+
+        public void setSource(String source) {
+            this.source = source;
         }
     }
 
