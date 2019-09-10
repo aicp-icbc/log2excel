@@ -14,7 +14,7 @@ public class Log2excleApplication {
         System.out.println("开----------------------------------日志文件转写-----------------------------------始");
         ConversationRecord.run(args);
         try {
-            sleep(500);
+            sleep(1500);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }

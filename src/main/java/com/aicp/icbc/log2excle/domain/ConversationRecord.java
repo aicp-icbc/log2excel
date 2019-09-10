@@ -6,6 +6,7 @@ import com.alibaba.fastjson.JSONObject;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.IndexedColors;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -67,7 +68,7 @@ public class ConversationRecord {
                         clarify_questions = content;
                     }
                     if (currConversation.containsKey("enter_top_node_name")) {
-                        enter_top_node_name = currConversation.getString("enter_top_node_name");
+                        enter_top_node_name = currConversation.getString("enter_top_node_name").trim().replaceAll("(\\\r\\\n|\\\r|\\\n|\\\n\\\r)", "");
                     }
                     //取回复类型
                     if (currConversation.containsKey("source")) {
@@ -90,7 +91,7 @@ public class ConversationRecord {
                         if("task_based".equals(source)){
                             source = "多轮会话";
                         }
-                        if("FAQ".equals(source)){
+                        if("faq".equals(source)){
                             source = "单轮问答";
                         }
                         if("chitchat".equals(source)){
@@ -171,36 +172,77 @@ public class ConversationRecord {
             row.createCell(6).setCellValue("返回答案");
             int rowNum = 1;
             int serialNo = 0;
-            int outSerialNo = 0;
+            int outSerialNo = 1;
             int keepNo = 52;
             int outPrintNum = 0;
             String outSessionID = conversationSortList.get(0).getSession_id();
             Boolean newTalk = true;
-//            for (Conversation conversation : conversationList) {
+            //记录导出Excel中新会话的row起始结束 -- 合并序号
+            Integer talkFromNum = 1;
+            Integer talkEndNum = 1;
+            //记录导出Excel中新会话的row起始结束 -- 合并序号
+            Integer scenesFromNum = 1;
+            Integer scenesEndNum = 1;
+            //记录场景名称
+            String scenesName = "-";
+
+            //填充一个空的Conversation用于合并最后一次会话
+            Conversation tempConversation = new Conversation();
+            tempConversation.setQuery_text("--temp--for--merge--");
+            conversationSortList.add(tempConversation);
+
             for (Conversation conversation : conversationSortList) {
-//                if (!"".equals(conversation.getWelcome())) {
-//                    serialNo++;
-//                }
-//                if(("2019-09-05 10:56:00").compareTo(conversation.getTime()) <= 0){
                 if(true){
+                    //移除欢迎语对话 -- 询问字段问空
                     if(!StringUtils.isEmpty(conversation.getQuery_text())){
-                        XSSFRow currRow = sheet.createRow(rowNum++);
                         if(!outSessionID.equals(conversation.getSession_id())){
                             outSerialNo ++;
                             outSessionID = conversation.getSession_id();
                             newTalk = true;
+                            //开启新会话 -- 合并上一次会话 -- 合并序号列单元格
+                            //System.out.println((rowNum - 1) +" "+ outSerialNo + " " +talkFromNum+ " " +talkEndNum);
+                            if((talkEndNum - talkFromNum) > 0){
+                                sheet.addMergedRegion(new CellRangeAddress(talkFromNum, talkEndNum, 0, 0));
+                            }
+                            //开启新会话 -- 记录起始行号
+                            talkFromNum = rowNum ;
+                        }else {
+                            //对话更新 更新会话结束的行号
+                            talkEndNum = rowNum ;
                         }
-                        if(newTalk){
-                            currRow.createCell(0).setCellValue(outSerialNo);
-                            newTalk = false;
+
+                        //每次新增对话 判断场景未跳转 --在同一会话内 -- 更新场景结束行号
+//                        if(scenesName.equals(conversation.getEnter_top_node_name()) && !newTalk){
+//                            scenesEndNum = rowNum - 1;
+//                        }else if(!newTalk) {
+//                            System.out.println(scenesName + "" + conversation.getEnter_top_node_name());
+//                            //判断场景已跳转
+//                            //-- 合并上个一场景  场景列单元格
+//                            if((scenesEndNum  - scenesFromNum) > 0){
+//                                sheet.addMergedRegion(new CellRangeAddress(scenesFromNum,scenesEndNum,1,1));
+//                            }
+//                            // -- 更新场景名称
+//                            scenesName = conversation.getEnter_top_node_name();
+//                            //-- 更新场景开始行号
+//                            scenesFromNum = rowNum - 1;
+//                        }
+                        //判断是否为填充列
+                        if(!"--temp--for--merge--".equals(conversation.getQuery_text())){
+                            //新增一行记录
+                            XSSFRow currRow = sheet.createRow(rowNum++);
+
+                            if(newTalk){
+                                currRow.createCell(0).setCellValue(outSerialNo);
+                                newTalk = false;
+                            }
+                            currRow.createCell(1).setCellValue(conversation.getEnter_top_node_name());
+                            currRow.createCell(2).setCellValue(conversation.getSession_id());
+                            currRow.createCell(3).setCellValue(conversation.getTime());
+                            currRow.createCell(4).setCellValue("".equals(conversation.getQuery_text())?"":conversation.getQuery_text());
+                            currRow.createCell(5).setCellValue(conversation.getSource());
+                            currRow.createCell(6).setCellValue("".equals(conversation.getSuggest_answer())
+                                    ?conversation.getWelcome():conversation.getSuggest_answer());
                         }
-                        currRow.createCell(1).setCellValue(conversation.getEnter_top_node_name());
-                        currRow.createCell(2).setCellValue(conversation.getSession_id());
-                        currRow.createCell(3).setCellValue(conversation.getTime());
-                        currRow.createCell(4).setCellValue("".equals(conversation.getQuery_text())?"":conversation.getQuery_text());
-                        currRow.createCell(5).setCellValue(conversation.getSource());
-                        currRow.createCell(6).setCellValue("".equals(conversation.getSuggest_answer())?conversation.getWelcome():conversation.getSuggest_answer());
-                        //
                     }
                 }
                 //打印进度条
@@ -216,7 +258,7 @@ public class ConversationRecord {
                 if(outPrintNum == conversationSortList.size() - 1){
                     System.out.print("\r读取进度：" + scheduleNum  + "%\t" + "●●●●●●●●●●●●●●●●●●●●" + "\t" + conversationSortList.size() + "/" + conversationSortList.size() );
                 }else {
-                    System.out.print("\r读取进度：" + scheduleNum  + "%\t" + tu + "\t" + outPrintNum + "/" + conversationSortList.size());
+                    //System.out.print("\r读取进度：" + scheduleNum  + "%\t" + tu + "\t" + outPrintNum + "/" + conversationSortList.size());
                 }
                 outPrintNum ++;
             }
