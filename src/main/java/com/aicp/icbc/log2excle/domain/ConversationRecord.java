@@ -289,9 +289,9 @@ public class ConversationRecord {
                     tu += "○";
                 }
                 if(outPrintNum == conversationSortList.size() - 1){
-                    System.out.print("\r读取进度：" + scheduleNum  + "%\t" + "●●●●●●●●●●●●●●●●●●●●" + "\t" + conversationSortList.size() + "/" + conversationSortList.size() );
+                    System.out.print("\r读取进度：" + 100  + "%\t" + "●●●●●●●●●●●●●●●●●●●●" + "\t" + conversationSortList.size() + "/" + conversationSortList.size() );
                 }else {
-                    //System.out.print("\r读取进度：" + scheduleNum  + "%\t" + tu + "\t" + outPrintNum + "/" + conversationSortList.size());
+                    System.out.print("\r读取进度：" + scheduleNum  + "%\t" + tu + "\t" + outPrintNum + "/" + conversationSortList.size());
                 }
                 outPrintNum ++;
             }
@@ -301,7 +301,6 @@ public class ConversationRecord {
             br.close();
         } catch (Exception e) {
             e.printStackTrace();
-            System.err.println("read errors :" + e);
         }
 
     }

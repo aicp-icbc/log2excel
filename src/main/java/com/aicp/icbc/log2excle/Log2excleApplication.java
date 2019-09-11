@@ -11,14 +11,14 @@ public class Log2excleApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(Log2excleApplication.class, args);
-        System.out.println("开----------------------------------日志文件转写-----------------------------------始");
+        System.out.println("开----------------------------------日志文件转写-----------------------------------始\n");
         ConversationRecord.run(args);
+        System.out.println("\n完----------------------------------日志文件转写-----------------------------------成");
         try {
             sleep(1500);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-        System.out.println("完----------------------------------日志文件转写-----------------------------------成");
     }
 
 }
