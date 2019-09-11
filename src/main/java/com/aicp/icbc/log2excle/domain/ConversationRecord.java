@@ -68,7 +68,7 @@ public class ConversationRecord {
                         clarify_questions = content;
                     }
                     if (currConversation.containsKey("enter_top_node_name")) {
-                        enter_top_node_name = currConversation.getString("enter_top_node_name").trim().replaceAll("(\\\r\\\n|\\\r|\\\n|\\\n\\\r)", "");
+                        enter_top_node_name = currConversation.getString("enter_top_node_name").trim().replaceAll(" ","");
                     }
                     //取回复类型
                     if (currConversation.containsKey("source")) {
@@ -153,8 +153,8 @@ public class ConversationRecord {
             XSSFWorkbook workbook = new XSSFWorkbook();
             XSSFSheet sheet = workbook.createSheet();
             XSSFRow row = sheet.createRow(0);
-            sheet.setColumnWidth(1, 25 * 256);
-            sheet.setColumnWidth(2, 40 * 256);
+            sheet.setColumnWidth(1, 40 * 256);
+            sheet.setColumnWidth(2, 25 * 256);
             sheet.setColumnWidth(3, 25 * 256);
             sheet.setColumnWidth(4, 25 * 256);
             sheet.setColumnWidth(5, 10 * 256);
@@ -164,8 +164,8 @@ public class ConversationRecord {
             style.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
             style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
             row.createCell(0).setCellValue("序号");
-            row.createCell(1).setCellValue("场景");
-            row.createCell(2).setCellValue("ID");
+            row.createCell(1).setCellValue("ID");
+            row.createCell(2).setCellValue("场景");
             row.createCell(3).setCellValue("时间");
             row.createCell(4).setCellValue("客户问题");
             row.createCell(5).setCellValue("回复类型");
@@ -183,12 +183,16 @@ public class ConversationRecord {
             //记录导出Excel中新会话的row起始结束 -- 合并序号
             Integer scenesFromNum = 1;
             Integer scenesEndNum = 1;
+            String scenesSessionIdBefore = "--temp--begain--";
+
             //记录场景名称
             String scenesName = "-";
-
+            Boolean firstIn = true;
             //填充一个空的Conversation用于合并最后一次会话
             Conversation tempConversation = new Conversation();
             tempConversation.setQuery_text("--temp--for--merge--");
+            tempConversation.setEnter_top_node_name("--temp--for--merge--");
+            tempConversation.setSession_id("--temp--for--merge--");
             conversationSortList.add(tempConversation);
 
             for (Conversation conversation : conversationSortList) {
@@ -198,11 +202,18 @@ public class ConversationRecord {
                         if(!outSessionID.equals(conversation.getSession_id())){
                             outSerialNo ++;
                             outSessionID = conversation.getSession_id();
+                            //进入新的对话 设置标识
                             newTalk = true;
+                            //第一次进入会话
+                            if(!firstIn){
+                                firstIn = false;
+                                scenesSessionIdBefore = conversation.getSession_id();
+                            }
                             //开启新会话 -- 合并上一次会话 -- 合并序号列单元格
                             //System.out.println((rowNum - 1) +" "+ outSerialNo + " " +talkFromNum+ " " +talkEndNum);
                             if((talkEndNum - talkFromNum) > 0){
                                 sheet.addMergedRegion(new CellRangeAddress(talkFromNum, talkEndNum, 0, 0));
+                                sheet.addMergedRegion(new CellRangeAddress(talkFromNum, talkEndNum, 1, 1));
                             }
                             //开启新会话 -- 记录起始行号
                             talkFromNum = rowNum ;
@@ -211,32 +222,54 @@ public class ConversationRecord {
                             talkEndNum = rowNum ;
                         }
 
-                        //每次新增对话 判断场景未跳转 --在同一会话内 -- 更新场景结束行号
-//                        if(scenesName.equals(conversation.getEnter_top_node_name()) && !newTalk){
-//                            scenesEndNum = rowNum - 1;
-//                        }else if(!newTalk) {
-//                            System.out.println(scenesName + "" + conversation.getEnter_top_node_name());
-//                            //判断场景已跳转
-//                            //-- 合并上个一场景  场景列单元格
-//                            if((scenesEndNum  - scenesFromNum) > 0){
-//                                sheet.addMergedRegion(new CellRangeAddress(scenesFromNum,scenesEndNum,1,1));
+                        //每次新增对话 判断场景未跳转 --在同一会话内 -- 更新场景开始行号
+//                        if(scenesSessionIdBefore.hashCode() == conversation.getSession_id().hashCode()){
+//                            if(!(scenesName.hashCode() == conversation.getEnter_top_node_name().hashCode()) ){
+//                                System.out.print("更新场景 "+rowNum + " " + scenesFromNum + " " + scenesEndNum + " ");
+//                                System.out.println(scenesName + " " + conversation.getEnter_top_node_name() + " ");
+//                                //判断场景已跳转
+//                                //-- 合并上个一场景  场景列单元格
+//                                if((rowNum  - scenesFromNum) > 1){
+//                                    //第一次进入场景向上兼容多合并一个单元格
+////                                    if(firstIn){
+////                                        sheet.addMergedRegion(new CellRangeAddress((scenesFromNum - 1),scenesEndNum,1,1));
+////                                        firstIn = false;
+////                                    }else {
+////                                        sheet.addMergedRegion(new CellRangeAddress(scenesFromNum,scenesEndNum,1,1));
+////                                    }
+//                                    sheet.addMergedRegion(new CellRangeAddress(scenesFromNum, rowNum - 1,1,1));
+//                                }
+//                                // 合并完成-- 更新场景名称
+//                                scenesName = conversation.getEnter_top_node_name();
+//                                //-- 合并完成   更新场景  开始行号 -- 从结束的下一行开始
+//                                scenesFromNum = rowNum;
 //                            }
-//                            // -- 更新场景名称
+//                        }else {
+//                            //更新会话时 -- 更新场景名称
 //                            scenesName = conversation.getEnter_top_node_name();
-//                            //-- 更新场景开始行号
-//                            scenesFromNum = rowNum - 1;
+//                            //更新会话时 -- 更新场景开始行号
+//                            scenesFromNum = scenesFromNum > rowNum ? scenesEndNum :rowNum;
+//                            System.out.println("更新会话 "+rowNum + " " + scenesFromNum + " " + scenesEndNum
+//                                    + " " + scenesSessionIdBefore.substring(0,4) + " " + conversation.getSession_id().substring(0,4));
+//                            //保存新会话ID
+////                            scenesSessionIdBefore = conversation.getSession_id();
 //                        }
+
                         //判断是否为填充列
                         if(!"--temp--for--merge--".equals(conversation.getQuery_text())){
                             //新增一行记录
                             XSSFRow currRow = sheet.createRow(rowNum++);
-
+                            //新增记录 修改场景结束行号
+                            scenesEndNum = rowNum;
                             if(newTalk){
-                                currRow.createCell(0).setCellValue(outSerialNo);
+                                //改变新会话标识
                                 newTalk = false;
+                                currRow.createCell(0).setCellValue(outSerialNo);
                             }
-                            currRow.createCell(1).setCellValue(conversation.getEnter_top_node_name());
-                            currRow.createCell(2).setCellValue(conversation.getSession_id());
+                            currRow.createCell(1).setCellValue(outSessionID);
+
+                            currRow.createCell(2).setCellValue(conversation.getEnter_top_node_name());
+//                            currRow.createCell(2).setCellValue(conversation.getSession_id());
                             currRow.createCell(3).setCellValue(conversation.getTime());
                             currRow.createCell(4).setCellValue("".equals(conversation.getQuery_text())?"":conversation.getQuery_text());
                             currRow.createCell(5).setCellValue(conversation.getSource());
