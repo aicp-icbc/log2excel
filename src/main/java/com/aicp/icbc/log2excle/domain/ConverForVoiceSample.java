@@ -2,14 +2,11 @@ package com.aicp.icbc.log2excle.domain;
 
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
-import org.apache.poi.ss.usermodel.CellStyle;
-import org.apache.poi.ss.usermodel.FillPatternType;
-import org.apache.poi.ss.usermodel.IndexedColors;
+import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
-import org.apache.poi.xssf.usermodel.XSSFRow;
-import org.apache.poi.xssf.usermodel.XSSFSheet;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xssf.usermodel.*;
 import org.springframework.util.StringUtils;
 
 import java.io.*;
@@ -23,7 +20,7 @@ import java.util.regex.Pattern;
  * @date：Created in 2019-08-22 18:09
  * @modified By liuxincheng01
  */
-public class ConversationRecord {
+public class ConverForVoiceSample {
 
     private static final String regex = "\\{.+\\}";
     private static Pattern pattern = Pattern.compile(regex);
@@ -41,65 +38,127 @@ public class ConversationRecord {
                     while (match.find()) {
                         matchText = match.group();
                     }
-                    JSONObject currConversation = JSON.parseObject(matchText);
+                    //转换为JSON字段
+                    JSONObject perLineJsonObject = JSON.parseObject(matchText);
                     String welcome = "";
                     String query_text = "";
                     String suggest_answer = "";
-                    String clarify_questions = "";
                     String enter_top_node_name = "";
                     String session_id = "";
+                    String phoneNum = "";
                     String source = "";
-                    if (currConversation.containsKey("session_id")) {
-                        session_id = (String) currConversation.get("session_id");
+                    //标答 -- 标准问
+                    String standardQuestion = "";
+                    //回复答案
+                    String responseAnswer = "";
+                    //澄清 -- 建议问
+                    String suggested_questions = "";
+
+                    //取session_id
+                    if (perLineJsonObject.containsKey("session_id")) {
+                        session_id = (String) perLineJsonObject.get("session_id");
                     }
-                    if (currConversation.containsKey("welcome")) {
-                        welcome = currConversation.getString("welcome");
+                    //取电话号码
+                    if (perLineJsonObject.containsKey("channel")) {
+                        String phoneNumStr = ((String) perLineJsonObject.get("channel"));
+                        if(!StringUtils.isEmpty(phoneNumStr) && phoneNumStr.length() >= 7){
+                            phoneNum = phoneNumStr.replace("IVRGIL-","");
+                        }else {
+                            phoneNum = phoneNumStr;
+                        }
                     }
-                    if (currConversation.containsKey("query_text")) {
-                        query_text = currConversation.getString("query_text");
+                    //取欢迎语
+                    if (perLineJsonObject.containsKey("welcome")) {
+                        welcome = perLineJsonObject.getString("welcome");
                     }
-                    if (currConversation.containsKey("suggest_answer")) {
-                        suggest_answer = currConversation.getString("suggest_answer");
+                    //取询问问法
+                    if (perLineJsonObject.containsKey("query_text")) {
+                        query_text = perLineJsonObject.getString("query_text");
                     }
-                    if (currConversation.containsKey("clarify_questions")) {
-                        JSONObject clarifyQuestions = (JSONObject) currConversation.get("clarify_questions");
-                        JSONObject voice = (JSONObject) clarifyQuestions.get("voice");
-                        String content = voice.getString("content");
-                        clarify_questions = content;
+                    //取建议回答
+                    if (perLineJsonObject.containsKey("suggest_answer")) {
+                        suggest_answer = perLineJsonObject.getString("suggest_answer");
                     }
-                    if (currConversation.containsKey("enter_top_node_name")) {
-                        enter_top_node_name = currConversation.getString("enter_top_node_name").trim().replaceAll(" ","");
+                    //取命中标准问
+                    if (perLineJsonObject.containsKey("answer")) {
+                        JSONObject answer = perLineJsonObject.getJSONObject("answer");
+                        if(answer!= null && answer.containsKey("standardQuestion")){
+                            standardQuestion = answer.getString("standardQuestion");
+                        }
+                    }
+
+                    //命中澄清 --- 取建议问 -- 没有回复
+                    if (perLineJsonObject.containsKey("confirm_questions")) {
+                        //澄清 -- 建议问题们
+                        JSONArray confirm_questions = perLineJsonObject.getJSONArray("confirm_questions");
+                        for (int i = 0; i < confirm_questions.size(); i++) {
+                            if(i == 0){
+                                suggested_questions += ((JSONObject)confirm_questions.get(i)).getString("question");
+                            }else {
+                                suggested_questions += "、" + ((JSONObject)confirm_questions.get(i)).getString("question");
+                            }
+                        }
+
+                    }
+                    //取场景名
+                    if (perLineJsonObject.containsKey("enter_top_node_name")) {
+                        enter_top_node_name = perLineJsonObject.getString("enter_top_node_name").trim().replaceAll(" ","");
                     }
                     //取回复类型
-                    if (currConversation.containsKey("source")) {
-                        source = currConversation.getString("source");
+                    if (perLineJsonObject.containsKey("source")) {
+                        source = perLineJsonObject.getString("source");
                     }
+
+                    //-----------------设值---------------------
                     Conversation conversation = new Conversation();
+                    //设置session_id
+                    conversation.setSession_id(session_id);
+                    //设置电话号码
+                    conversation.setPhoneNum(phoneNum);
+                    //欢迎语
                     conversation.setWelcome(welcome);
+                    //设置时间
+                    conversation.setTime(perLineJsonObject.getString("answer_time"));
+                    //设置场景名
+                    conversation.setEnter_top_node_name(enter_top_node_name);
+                    //设置询问问法
                     conversation.setQuery_text(query_text);
+
+                    //设置触发的标准问或者建议问
+                    if(!StringUtils.isEmpty(suggest_answer)){
+                        //非澄清 -- 返回命中标准问
+                        conversation.setStandardQuestion(standardQuestion);
+                    }else if(!StringUtils.isEmpty(suggested_questions)){
+                        //澄清 -- 返回空答案
+                        conversation.setStandardQuestion(suggested_questions);
+                    }
+
                     //设置回答字段 -- 区别澄清问答
                     if(!StringUtils.isEmpty(suggest_answer)){
-                        conversation.setSuggest_answer(suggest_answer);
-                    }else if(!StringUtils.isEmpty(clarify_questions)){
-                        conversation.setSuggest_answer(clarify_questions);
+                        //非澄清 -- 返回建议回答
+                        conversation.setResponseAnswer(suggest_answer);
+                    }else if(!StringUtils.isEmpty(suggested_questions)){
+                        //澄清 -- 返回空答案
+                        conversation.setResponseAnswer("");
                     }
-                    conversation.setTime(currConversation.getString("answer_time"));
-                    conversation.setEnter_top_node_name(enter_top_node_name);
-                    conversation.setSession_id(session_id);
+
                     //转换回复类型
                     if(!StringUtils.isEmpty(source)){
                         if("task_based".equals(source)){
                             source = "多轮会话";
                         }
                         if("faq".equals(source)){
-                            source = "单轮问答";
+                            source = "标准回复";
                         }
                         if("chitchat".equals(source)){
                             source = "闲聊";
                         }
+                        if("clarity".equals(source)){
+                            source = "建议问";
+                        }
                         if("none".equals(source)){
-                            //子回复类型  -- 建议问
-                            if(!StringUtils.isEmpty(clarify_questions)){
+                            //子回复类型  -- 建议问 -- 默认回复
+                            if(!StringUtils.isEmpty(suggested_questions)){
                                 source = "建议问";
                             }else {
                                 source = "默认回复";
@@ -109,6 +168,8 @@ public class ConversationRecord {
 
                     }
                     conversation.setSource(source);
+
+                    //添加数组
                     conversationList.add(conversation);
                 }
             }
@@ -151,43 +212,63 @@ public class ConversationRecord {
 
             // 开始输出到excel
             XSSFWorkbook workbook = new XSSFWorkbook();
+            // 设置表头样式  // 竖向居中  // 横向居中 // 边框  //黄色
+            XSSFCellStyle headStyle = workbook.createCellStyle();
+            headStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+            headStyle.setAlignment(HorizontalAlignment.CENTER);
+            headStyle.setBorderBottom(BorderStyle.THIN);
+            headStyle.setBorderLeft(BorderStyle.THIN);
+            headStyle.setBorderRight(BorderStyle.THIN);
+            headStyle.setBorderTop(BorderStyle.THIN);
+            headStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
+            headStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            //设置单元格样式
+            XSSFCellStyle cellStyle = workbook.createCellStyle();
+            cellStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+            cellStyle.setAlignment(HorizontalAlignment.CENTER);
+            cellStyle.setBorderBottom(BorderStyle.THIN);
+            cellStyle.setBorderLeft(BorderStyle.THIN);
+            cellStyle.setBorderRight(BorderStyle.THIN);
+            cellStyle.setBorderTop(BorderStyle.THIN);
+
+
+            //新建表头
             XSSFSheet sheet = workbook.createSheet();
             XSSFRow row = sheet.createRow(0);
-            sheet.setColumnWidth(1, 40 * 256);
-            sheet.setColumnWidth(2, 25 * 256);
-            sheet.setColumnWidth(3, 25 * 256);
-            sheet.setColumnWidth(4, 25 * 256);
-            sheet.setColumnWidth(5, 10 * 256);
-            sheet.setColumnWidth(6, 220 * 256);
 
-            CellStyle style = workbook.createCellStyle();
-            style.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
-            style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            sheet.setColumnWidth(0, 7 * 256);
+            sheet.setColumnWidth(1, 38 * 256);
+            sheet.setColumnWidth(2, 15 * 256);
+//            sheet.setColumnWidth(2, 25 * 256);
+            sheet.setColumnWidth(3, 20 * 256);
+            sheet.setColumnWidth(4, 25 * 256);
+            sheet.setColumnWidth(5, 25 * 256);
+            sheet.setColumnWidth(6, 13 * 256);
+            sheet.setColumnWidth(7, 220 * 256);
+
+
             row.createCell(0).setCellValue("序号");
             row.createCell(1).setCellValue("ID");
-            row.createCell(2).setCellValue("场景");
+            row.createCell(2).setCellValue("电话号码");
+//            row.createCell(2).setCellValue("场景");
             row.createCell(3).setCellValue("时间");
-            row.createCell(4).setCellValue("客户问题");
-            row.createCell(5).setCellValue("回复类型");
-            row.createCell(6).setCellValue("返回答案");
+            row.createCell(4).setCellValue("测试问法");
+            row.createCell(5).setCellValue("触发的标准问或建议问");
+            row.createCell(6).setCellValue("返回结果类型");
+            row.createCell(7).setCellValue("返回答案");
+            for (int i = 0; i < 8; i++) {
+                row.getCell(i).setCellStyle(headStyle);
+            }
             int rowNum = 1;
-            int serialNo = 0;
             int outSerialNo = 1;
-            int keepNo = 52;
             int outPrintNum = 0;
             String outSessionID = conversationSortList.get(0).getSession_id();
             Boolean newTalk = true;
             //记录导出Excel中新会话的row起始结束 -- 合并序号
             Integer talkFromNum = 1;
             Integer talkEndNum = 1;
-            //记录导出Excel中新会话的row起始结束 -- 合并序号
-            Integer scenesFromNum = 1;
-            Integer scenesEndNum = 1;
-            String scenesSessionIdBefore = "--temp--begain--";
 
-            //记录场景名称
-            String scenesName = "-";
-            Boolean firstIn = true;
+
             //填充一个空的Conversation用于合并最后一次会话
             Conversation tempConversation = new Conversation();
             tempConversation.setQuery_text("--temp--for--merge--");
@@ -204,16 +285,12 @@ public class ConversationRecord {
                             outSessionID = conversation.getSession_id();
                             //进入新的对话 设置标识
                             newTalk = true;
-                            //第一次进入会话
-                            if(!firstIn){
-                                firstIn = false;
-                                scenesSessionIdBefore = conversation.getSession_id();
-                            }
                             //开启新会话 -- 合并上一次会话 -- 合并序号列单元格
                             //System.out.println((rowNum - 1) +" "+ outSerialNo + " " +talkFromNum+ " " +talkEndNum);
                             if((talkEndNum - talkFromNum) > 0){
                                 sheet.addMergedRegion(new CellRangeAddress(talkFromNum, talkEndNum, 0, 0));
                                 sheet.addMergedRegion(new CellRangeAddress(talkFromNum, talkEndNum, 1, 1));
+                                sheet.addMergedRegion(new CellRangeAddress(talkFromNum, talkEndNum, 2, 2));
                             }
                             //开启新会话 -- 记录起始行号
                             talkFromNum = rowNum ;
@@ -222,59 +299,30 @@ public class ConversationRecord {
                             talkEndNum = rowNum ;
                         }
 
-                        //每次新增对话 判断场景未跳转 --在同一会话内 -- 更新场景开始行号
-//                        if(scenesSessionIdBefore.hashCode() == conversation.getSession_id().hashCode()){
-//                            if(!(scenesName.hashCode() == conversation.getEnter_top_node_name().hashCode()) ){
-//                                System.out.print("更新场景 "+rowNum + " " + scenesFromNum + " " + scenesEndNum + " ");
-//                                System.out.println(scenesName + " " + conversation.getEnter_top_node_name() + " ");
-//                                //判断场景已跳转
-//                                //-- 合并上个一场景  场景列单元格
-//                                if((rowNum  - scenesFromNum) > 1){
-//                                    //第一次进入场景向上兼容多合并一个单元格
-////                                    if(firstIn){
-////                                        sheet.addMergedRegion(new CellRangeAddress((scenesFromNum - 1),scenesEndNum,1,1));
-////                                        firstIn = false;
-////                                    }else {
-////                                        sheet.addMergedRegion(new CellRangeAddress(scenesFromNum,scenesEndNum,1,1));
-////                                    }
-//                                    sheet.addMergedRegion(new CellRangeAddress(scenesFromNum, rowNum - 1,1,1));
-//                                }
-//                                // 合并完成-- 更新场景名称
-//                                scenesName = conversation.getEnter_top_node_name();
-//                                //-- 合并完成   更新场景  开始行号 -- 从结束的下一行开始
-//                                scenesFromNum = rowNum;
-//                            }
-//                        }else {
-//                            //更新会话时 -- 更新场景名称
-//                            scenesName = conversation.getEnter_top_node_name();
-//                            //更新会话时 -- 更新场景开始行号
-//                            scenesFromNum = scenesFromNum > rowNum ? scenesEndNum :rowNum;
-//                            System.out.println("更新会话 "+rowNum + " " + scenesFromNum + " " + scenesEndNum
-//                                    + " " + scenesSessionIdBefore.substring(0,4) + " " + conversation.getSession_id().substring(0,4));
-//                            //保存新会话ID
-////                            scenesSessionIdBefore = conversation.getSession_id();
-//                        }
 
                         //判断是否为填充列
                         if(!"--temp--for--merge--".equals(conversation.getQuery_text())){
                             //新增一行记录
                             XSSFRow currRow = sheet.createRow(rowNum++);
-                            //新增记录 修改场景结束行号
-                            scenesEndNum = rowNum;
                             if(newTalk){
                                 //改变新会话标识
                                 newTalk = false;
                                 currRow.createCell(0).setCellValue(outSerialNo);
                             }
                             currRow.createCell(1).setCellValue(outSessionID);
-
-                            currRow.createCell(2).setCellValue(conversation.getEnter_top_node_name());
-//                            currRow.createCell(2).setCellValue(conversation.getSession_id());
+                            currRow.createCell(2).setCellValue(conversation.getPhoneNum());
+//                            currRow.createCell(2).setCellValue(conversation.getEnter_top_node_name());
                             currRow.createCell(3).setCellValue(conversation.getTime());
-                            currRow.createCell(4).setCellValue("".equals(conversation.getQuery_text())?"":conversation.getQuery_text());
-                            currRow.createCell(5).setCellValue(conversation.getSource());
-                            currRow.createCell(6).setCellValue("".equals(conversation.getSuggest_answer())
-                                    ?conversation.getWelcome():conversation.getSuggest_answer());
+                            currRow.createCell(4).setCellValue(conversation.getQuery_text());
+                            currRow.createCell(5).setCellValue(conversation.getStandardQuestion());
+                            currRow.createCell(6).setCellValue(conversation.getSource());
+                            currRow.createCell(7).setCellValue(conversation.getResponseAnswer());
+                            //设置表格样式
+                            for (int j = 0; j < 8 ; j++) {
+                                if(currRow.getCell(j) != null){
+                                    currRow.getCell(j).setCellStyle(cellStyle);
+                                }
+                            }
                         }
                     }
                 }
@@ -298,7 +346,19 @@ public class ConversationRecord {
             System.out.println("\t" + "开始写入Excel");
             FileOutputStream fos = new FileOutputStream("conversation.xlsx");
             workbook.write(fos);
-            br.close();
+            try {
+                br.close();
+                fos.flush();
+            }catch (Exception e){
+
+            }finally {
+                if(br != null){
+                    br.close();
+                }
+                if (fos != null){
+                    fos.close();
+                }
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -310,10 +370,22 @@ public class ConversationRecord {
         private String query_text;
         private String suggest_answer;
         private String time;
+        //顶层节点
         private String enter_top_node_name;
         private String session_id;
+        //回复类型
         private String source;
         private int talkNum;
+        //澄清触发的建议问
+        private String confirm_questions;
+        //标准问
+        private String standardQuestion;
+
+        //返回答案
+        private String responseAnswer;
+
+        private String phoneNum;
+
         public String getSession_id() {
             return session_id;
         }
@@ -378,6 +450,39 @@ public class ConversationRecord {
         public void setSource(String source) {
             this.source = source;
         }
+
+        public String getConfirm_questions() {
+            return confirm_questions;
+        }
+
+        public void setConfirm_questions(String confirm_questions) {
+            this.confirm_questions = confirm_questions;
+        }
+
+        public String getStandardQuestion() {
+            return standardQuestion;
+        }
+
+        public void setStandardQuestion(String standardQuestion) {
+            this.standardQuestion = standardQuestion;
+        }
+
+        public String getResponseAnswer() {
+            return responseAnswer;
+        }
+
+        public void setResponseAnswer(String responseAnswer) {
+            this.responseAnswer = responseAnswer;
+        }
+
+        public String getPhoneNum() {
+            return phoneNum;
+        }
+
+        public void setPhoneNum(String phoneNum) {
+            this.phoneNum = phoneNum;
+        }
     }
+
 
 }
