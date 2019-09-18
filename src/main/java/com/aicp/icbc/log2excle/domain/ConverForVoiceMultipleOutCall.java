@@ -21,6 +21,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * @author: liuxincheng01
@@ -39,6 +40,33 @@ public class ConverForVoiceMultipleOutCall {
                     "UTF-8"));
             String lineTxt = null;
             List<Conversation> conversationList = new ArrayList<>();
+            //获取配置文件信息
+            //获取token
+            String tokenFileName = "log2excel.conf";
+            String timeBegin = "2019-09-18 07:54:21";
+            String timeEnd = "2019-09-18 23:54:21";
+            FileReader fr = null;
+            try {
+
+                try {
+                    fr = new FileReader(tokenFileName);
+                } catch (FileNotFoundException e) {
+                    e.printStackTrace();
+                }
+                BufferedReader buff = new BufferedReader(fr);
+                List<String> list = buff.lines().collect(Collectors.toList());
+                timeBegin = list.get(0);
+                timeEnd = list.get(1);
+                try {
+                    buff.close();
+                    fr.close();
+                } catch (IOException e) {
+
+                }
+            }catch (Exception e1){
+
+            }
+
             while ((lineTxt = br.readLine()) != null) {
                 if (!"".equals(lineTxt)) {
                     Matcher match = pattern.matcher(lineTxt);
@@ -317,7 +345,7 @@ public class ConverForVoiceMultipleOutCall {
             int rowNum = 1;
             int outSerialNo = 0;
             int outPrintNum = 0;
-            String outSessionID = conversationSortList.get(0).getSession_id();
+            String outSessionID = "--temp--for--begin--";
             Boolean newTalk = true;
             //记录导出Excel中新会话的row起始结束 -- 合并序号
             Integer talkFromNum = 1;
@@ -336,13 +364,15 @@ public class ConverForVoiceMultipleOutCall {
                     //移除欢迎语对话 -- 询问字段问空
 //                    if(!StringUtils.isEmpty(conversation.getQuery_text())){
                     LocalDateTime dateTimeOut = null;
-                    LocalDateTime dateTimeIn = LocalDateTime.parse("2019-09-18 12:54:21", DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+//                    LocalDateTime dateTimeIn = LocalDateTime.parse("2019-09-18 12:54:21", DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                    LocalDateTime dateTimeBegin = LocalDateTime.parse(timeBegin, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                    LocalDateTime dateTimeEnd = LocalDateTime.parse(timeEnd, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
                     try {
                         dateTimeOut = LocalDateTime.parse(conversation.getTime(),DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
                     }catch (Exception e){
                         dateTimeOut = LocalDateTime.parse("2019-09-18 12:55:21",DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
                     }
-                    if(dateTimeOut.isAfter(dateTimeIn)){
+                    if(dateTimeOut.isAfter(dateTimeBegin) && dateTimeOut.isBefore(dateTimeEnd)){
 //                    if(true){
                         if(!outSessionID.equals(conversation.getSession_id())){
                             outSerialNo ++;
