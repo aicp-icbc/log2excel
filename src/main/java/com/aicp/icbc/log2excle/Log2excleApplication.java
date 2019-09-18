@@ -1,6 +1,7 @@
 package com.aicp.icbc.log2excle;
 
 import com.aicp.icbc.log2excle.domain.ConverForVoiceMultiple;
+import com.aicp.icbc.log2excle.domain.ConverForVoiceMultipleOutCall;
 import com.aicp.icbc.log2excle.domain.ConverForVoiceSample;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -14,7 +15,8 @@ public class Log2excleApplication {
         SpringApplication.run(Log2excleApplication.class, args);
         System.out.println("开----------------------------------日志文件转写-----------------------------------始\n");
 //        ConverForVoiceSample.run(args);
-        ConverForVoiceMultiple.run(args);
+//        ConverForVoiceMultiple.run(args);
+        ConverForVoiceMultipleOutCall.run(args);
         System.out.println("\n完----------------------------------日志文件转写-----------------------------------成");
         try {
             sleep(1500);
