@@ -10,8 +10,10 @@ import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.format.datetime.joda.DateTimeParser;
 import org.springframework.util.StringUtils;
 
+import javax.smartcardio.Card;
 import java.io.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -42,6 +44,7 @@ public class ConverForVoiceMultipleInCall {
             String tokenFileName = "log2excel.conf";
             String timeBegin = "2019-09-18 07:54:21";
             String timeEnd = "2019-09-18 23:54:21";
+            String skyBlue = "抱歉，我没听清，您能再说一遍吗？";
             List<String> actionBank = null;
             List<String> actionBankMean = null;
             FileReader fr = null;
@@ -58,6 +61,7 @@ public class ConverForVoiceMultipleInCall {
                 timeEnd = list.get(1);
                 actionBank = Arrays.asList(list.get(2).split(","));
                 actionBankMean = Arrays.asList(list.get(3).split(","));
+                skyBlue = list.get(4);
                 try {
                     buff.close();
                     fr.close();
@@ -85,6 +89,9 @@ public class ConverForVoiceMultipleInCall {
                     String phoneNum = "";
                     String source = "";
                     String actionStr = "";
+                    String actionId = "";
+                    //用户按键输入身份证号和卡号
+                    String CardNOAndIDNumber = "";
                     //用户按键输入值
                     String InputKeys = "";
                     //标答 -- 标准问
@@ -197,12 +204,14 @@ public class ConverForVoiceMultipleInCall {
                                                     String actionMeanStr = actionBankMean.get(actionBank.indexOf(actionName));
                                                     if (StringUtils.isEmpty(actionStr)) {
                                                         actionStr += actionName;
+                                                        actionId += actionName;
                                                         //设置指令名称
                                                         if((!StringUtils.isEmpty(actionMeanStr)) && (!" ".equals(actionMeanStr))&& (!"-".equals(actionMeanStr))){
                                                             actionStr += "(" + actionMeanStr +")";
                                                         }
                                                     } else {
                                                         actionStr += "、" + actionName;
+                                                        actionId += "、" + actionName;
                                                         //设置指令名称
                                                         if((!StringUtils.isEmpty(actionMeanStr)) && (!" ".equals(actionMeanStr))&& (!"-".equals(actionMeanStr))){
                                                             actionStr += "(" + actionMeanStr +")";
@@ -228,6 +237,40 @@ public class ConverForVoiceMultipleInCall {
                                     //取用户按键输入的信息
                                     InputKeys = context.getString("InputKeys");
 //                                    System.out.println(InputKeys);
+                                }
+                            }
+                        }
+                    }
+                    //取多轮对话中用户按键输入值  -- 身份认证信息  IDENTITY_AUTH(身份验证)
+                    if ("task_based".equals(source)) {
+                        if (perLineJsonObject.containsKey("answer")) {
+                            //取最外围answer
+                            JSONObject answer = perLineJsonObject.getJSONObject("answer");
+                            if (answer != null && answer.containsKey("context")) {
+                                //取context域
+                                JSONObject context = answer.getJSONObject("context");
+                                String CardNO= "", IDNumber = "";
+                                //取用户按键输入的信息 -- 身份认证信息
+                                if (context != null && context.containsKey("CardNO")) {
+                                    CardNO = context.getString("CardNO");
+                                }
+                                if (context != null && context.containsKey("IDNumber")) {
+                                    IDNumber = context.getString("IDNumber");
+                                }
+                                //赋值身份认证信息字段
+                                if(actionId.indexOf("IDENTITY_AUTH") > -1){
+                                    if(!StringUtils.isEmpty(CardNO)){
+                                        CardNOAndIDNumber += "卡号：" + CardNO;
+                                    }
+                                    if(!StringUtils.isEmpty(IDNumber)){
+                                        //卡号为空
+                                        if(StringUtils.isEmpty(CardNOAndIDNumber)){
+                                            CardNOAndIDNumber += "身份证：" + CardNO;
+                                        }
+                                        if(!StringUtils.isEmpty(CardNOAndIDNumber)){
+                                            CardNOAndIDNumber += "、身份证：" + CardNO;
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -263,6 +306,7 @@ public class ConverForVoiceMultipleInCall {
                         }else {
                             conversation.setQuery_text("");
                         }
+                        //IDENTITY_AUTH(身份验证) 获取 CardNO 和 IDNumber字段
 
                     }else {
                         conversation.setQuery_text(query_text);
@@ -287,6 +331,10 @@ public class ConverForVoiceMultipleInCall {
                     }
                     //设置命中行方指令
                     conversation.setActionStr(actionStr);
+                    //设置命中行方指令ID
+                    conversation.setActionId(actionId);
+                    //设置用户输入的身份信息
+                    conversation.setCardNOAndIDNumber(CardNOAndIDNumber);
                     //设置用户输入信息
                     conversation.setInputKeys(InputKeys);
 
@@ -316,6 +364,8 @@ public class ConverForVoiceMultipleInCall {
 
                     }
                     conversation.setSource(source);
+
+
 
                     //添加数组
                     conversationList.add(conversation);
@@ -428,21 +478,25 @@ public class ConverForVoiceMultipleInCall {
             //记录导出Excel中新会话的row起始结束 -- 合并序号
             Integer talkFromNum = 1;
             Integer talkEndNum = 1;
-
+            String actionIdPre = "";
 
             //填充一个空的Conversation用于合并最后一次会话
             Conversation tempConversation = new Conversation();
             tempConversation.setQuery_text("--temp--for--merge--");
             tempConversation.setEnter_top_node_name("--temp--for--merge--");
             tempConversation.setSession_id("--temp--for--merge--");
+            tempConversation.setTime(LocalDateTime.parse(timeBegin, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")).plusSeconds(1).
+                    format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
             conversationSortList.add(tempConversation);
 
-            for (Conversation conversation : conversationSortList) {
+            for (int ci = 0; ci < conversationSortList.size(); ci++) {
+                Conversation conversation = conversationSortList.get(ci);
+//            }
+//            for (Conversation conversation : conversationSortList) {
                 if(true){
                     //移除欢迎语对话 -- 询问字段问空
 //                    if(!StringUtils.isEmpty(conversation.getQuery_text())){
                     LocalDateTime dateTimeOut = null;
-//                    LocalDateTime dateTimeIn = LocalDateTime.parse("2019-09-18 12:54:21", DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
                     LocalDateTime dateTimeBegin = LocalDateTime.parse(timeBegin, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
                     LocalDateTime dateTimeEnd = LocalDateTime.parse(timeEnd, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
                     try {
@@ -470,7 +524,6 @@ public class ConverForVoiceMultipleInCall {
                             //对话更新 更新会话结束的行号
                             talkEndNum = rowNum ;
                         }
-
                         //判断是否为填充列
                         if(!"--temp--for--merge--".equals(conversation.getQuery_text())){
                             //新增一行记录
@@ -484,8 +537,18 @@ public class ConverForVoiceMultipleInCall {
                             currRow.createCell(2).setCellValue(conversation.getPhoneNum());
                             currRow.createCell(3).setCellValue(conversation.getEnter_top_node_name());
                             currRow.createCell(4).setCellValue(conversation.getTime());
-//                            currRow.createCell(5).setCellValue(conversation.getQuery_text());
                             currRow.createCell(5).setCellValue(conversation.getQuery_text());
+                            //分情况设置客户问题 -- 根据IVR指令 更新 输出的客户问题字段
+                            if(!StringUtils.isEmpty(actionIdPre)){
+                                //上一个会话为IDENTITY_AUTH -- 取身份验证信息
+                                if(actionIdPre.indexOf("IDENTITY_AUTH") > 0){
+                                    currRow.createCell(5).setCellValue(conversation.getCardNOAndIDNumber());
+                                }else {
+                                    //上一个会话为其它 -- 取InputKeys
+                                    currRow.createCell(5).setCellValue(conversation.getInputKeys());
+                                }
+                            }
+
                             currRow.createCell(6).setCellValue(conversation.getResponseAnswer());
                             currRow.createCell(7).setCellValue(conversation.getActionStr());
                             currRow.createCell(8).setCellValue(conversation.getSource());
@@ -496,11 +559,13 @@ public class ConverForVoiceMultipleInCall {
                                     currRow.getCell(j).setCellStyle(cellStyle);
                                 }
                             }
-                            //设置 返回答案 抱歉，我没听清，您能再说一遍吗？ 为绿底
-                            if("抱歉，我没听清，您能再说一遍吗？".equals(conversation.getResponseAnswer())){
+                            //设置 返回答案 抱歉，我没听清，您能再说一遍吗？ 天蓝色底
+                            if(skyBlue.equals(conversation.getResponseAnswer())){
                                 currRow.getCell(6).setCellStyle(cellStyleEmpty);
                             }
                         }
+                        //当前行赋值完毕，更新actionIdPre字段
+                        actionIdPre = conversation.getActionId();
                     }
                 }
                 //打印进度条
@@ -563,8 +628,12 @@ public class ConverForVoiceMultipleInCall {
         private String phoneNum;
         //action -- 指令名称
         private String actionStr;
+        //action -- 指令ID
+        private String actionId;
         //用户输入信息
         private String InputKeys;
+        //用户输入信息
+        private String CardNOAndIDNumber;
 
 
         public String getSession_id() {
@@ -678,6 +747,22 @@ public class ConverForVoiceMultipleInCall {
 
         public void setInputKeys(String inputKeys) {
             InputKeys = inputKeys;
+        }
+
+        public String getActionId() {
+            return actionId;
+        }
+
+        public void setActionId(String actionId) {
+            this.actionId = actionId;
+        }
+
+        public String getCardNOAndIDNumber() {
+            return CardNOAndIDNumber;
+        }
+
+        public void setCardNOAndIDNumber(String cardNOAndIDNumber) {
+            CardNOAndIDNumber = cardNOAndIDNumber;
         }
     }
 
