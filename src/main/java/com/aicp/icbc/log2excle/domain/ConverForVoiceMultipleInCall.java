@@ -196,9 +196,17 @@ public class ConverForVoiceMultipleInCall {
                                                 if (actionBank.contains(actionName)) {
                                                     String actionMeanStr = actionBankMean.get(actionBank.indexOf(actionName));
                                                     if (StringUtils.isEmpty(actionStr)) {
-                                                        actionStr += actionName+"(" + actionMeanStr +")";
+                                                        actionStr += actionName;
+                                                        //设置指令名称
+                                                        if((!StringUtils.isEmpty(actionMeanStr)) && (!" ".equals(actionMeanStr))&& (!"-".equals(actionMeanStr))){
+                                                            actionStr += "(" + actionMeanStr +")";
+                                                        }
                                                     } else {
-                                                        actionStr += "、" + actionName+"(" + actionMeanStr +")";
+                                                        actionStr += "、" + actionName;
+                                                        //设置指令名称
+                                                        if((!StringUtils.isEmpty(actionMeanStr)) && (!" ".equals(actionMeanStr))&& (!"-".equals(actionMeanStr))){
+                                                            actionStr += "(" + actionMeanStr +")";
+                                                        }
                                                     }
                                                 }
                                             }
