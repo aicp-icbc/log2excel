@@ -233,10 +233,14 @@ public class ConverForVoiceMultipleInCall {
                             if (answer != null && answer.containsKey("context")) {
                                 //取context域
                                 JSONObject context = answer.getJSONObject("context");
-                                if (context != null && context.containsKey("InputKeys")) {
+//                                if (context != null && context.containsKey("InputKeys")) {
+//                                    //取用户按键输入的信息
+//                                    InputKeys = context.getString("InputKeys");
+////                                    System.out.println(InputKeys);
+//                                }
+                                if (context != null && context.containsKey("printKeys")) {
                                     //取用户按键输入的信息
-                                    InputKeys = context.getString("InputKeys");
-//                                    System.out.println(InputKeys);
+                                    InputKeys = context.getString("printKeys");
                                 }
                             }
                         }
@@ -258,24 +262,20 @@ public class ConverForVoiceMultipleInCall {
                                     IDNumber = context.getString("IDNumber");
                                 }
                                 //赋值身份认证信息字段
-                                if(actionId.indexOf("IDENTITY_AUTH") > -1){
-                                    if(!StringUtils.isEmpty(CardNO)){
-                                        CardNOAndIDNumber += "卡号：" + CardNO;
-                                    }
-                                    if(!StringUtils.isEmpty(IDNumber)){
-                                        //卡号为空
-                                        if(StringUtils.isEmpty(CardNOAndIDNumber)){
-                                            CardNOAndIDNumber += "身份证：" + CardNO;
-                                        }
-                                        if(!StringUtils.isEmpty(CardNOAndIDNumber)){
-                                            CardNOAndIDNumber += "、身份证：" + CardNO;
-                                        }
+                                if(!StringUtils.isEmpty(CardNO)){
+                                    CardNOAndIDNumber += "卡号：" + CardNO;
+                                }
+                                if(!StringUtils.isEmpty(IDNumber)){
+                                    //卡号为空
+                                    if(StringUtils.isEmpty(CardNOAndIDNumber)){
+                                        CardNOAndIDNumber += "身份证：" + IDNumber;
+                                    }else if(!StringUtils.isEmpty(CardNOAndIDNumber)){
+                                        CardNOAndIDNumber += "、\n身份证：" + IDNumber;
                                     }
                                 }
                             }
                         }
                     }
-
                     //-----------------设值---------------------
                     Conversation conversation = new Conversation();
                     //设置session_id
@@ -306,8 +306,6 @@ public class ConverForVoiceMultipleInCall {
                         }else {
                             conversation.setQuery_text("");
                         }
-                        //IDENTITY_AUTH(身份验证) 获取 CardNO 和 IDNumber字段
-
                     }else {
                         conversation.setQuery_text(query_text);
                     }
@@ -363,8 +361,8 @@ public class ConverForVoiceMultipleInCall {
                         }
 
                     }
+                    CardNOAndIDNumber = "";
                     conversation.setSource(source);
-
 
 
                     //添加数组
@@ -539,16 +537,17 @@ public class ConverForVoiceMultipleInCall {
                             currRow.createCell(4).setCellValue(conversation.getTime());
                             currRow.createCell(5).setCellValue(conversation.getQuery_text());
                             //分情况设置客户问题 -- 根据IVR指令 更新 输出的客户问题字段
+                            actionIdPre = (ci == 0 ? conversationSortList.get(ci).getActionId()
+                                    :conversationSortList.get(ci - 1).getActionId());
                             if(!StringUtils.isEmpty(actionIdPre)){
                                 //上一个会话为IDENTITY_AUTH -- 取身份验证信息
-                                if(actionIdPre.indexOf("IDENTITY_AUTH") > 0){
+                                if(actionIdPre.indexOf("IDENTITY_AUTH") > -1){
                                     currRow.createCell(5).setCellValue(conversation.getCardNOAndIDNumber());
                                 }else {
                                     //上一个会话为其它 -- 取InputKeys
                                     currRow.createCell(5).setCellValue(conversation.getInputKeys());
                                 }
                             }
-
                             currRow.createCell(6).setCellValue(conversation.getResponseAnswer());
                             currRow.createCell(7).setCellValue(conversation.getActionStr());
                             currRow.createCell(8).setCellValue(conversation.getSource());
@@ -564,8 +563,6 @@ public class ConverForVoiceMultipleInCall {
                                 currRow.getCell(6).setCellStyle(cellStyleEmpty);
                             }
                         }
-                        //当前行赋值完毕，更新actionIdPre字段
-                        actionIdPre = conversation.getActionId();
                     }
                 }
                 //打印进度条
