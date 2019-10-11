@@ -24,17 +24,19 @@ import java.util.stream.Collectors;
 
 /**
  * @author: liuxincheng01
- * @description:
+ * @description: 多轮语音日志转写Excel文件
  * @date：Created in 2019-08-22 18:09
- * @modified By liuxincheng01
+ * @modified By 吴开云
  */
 public class ConverForVoiceMultipleInCall {
 
+    //通过正则表达式匹配json字符串
     private static final String regex = "\\{.+\\}";
     private static Pattern pattern = Pattern.compile(regex);
-
+    public static String type = "1";
     public static void run(String[] args) {
         try {
+            //读取当前目录下的日志文件
             BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(new File("conversation.log")),
                     "UTF-8"));
             String lineTxt = null;
@@ -42,14 +44,21 @@ public class ConverForVoiceMultipleInCall {
             //获取配置文件信息
             //获取token
             String tokenFileName = "log2excel.conf";
+            //默认起止时间
             String timeBegin = "2019-09-18 07:54:21";
             String timeEnd = "2019-09-18 23:54:21";
+            //设置初始化为蓝色的单元格内容
             String skyBlue = "抱歉，我没听清，您能再说一遍吗？";
+            //AICP 数据库中 agentID
+            List<String> agentID = null;
+            //AICP 数据库中 agent 名称
+            List<String> agentName = null;
+            //工商银行的指令 及 指令含义
             List<String> actionBank = null;
             List<String> actionBankMean = null;
             FileReader fr = null;
             try {
-
+                //获取配置文件信息 -- 同路径下的 tokenFileName 配置的文件名
                 try {
                     fr = new FileReader(tokenFileName);
                 } catch (FileNotFoundException e) {
@@ -60,8 +69,11 @@ public class ConverForVoiceMultipleInCall {
                 timeBegin = list.get(0);
                 timeEnd = list.get(1);
                 actionBank = Arrays.asList(list.get(2).split(","));
-                actionBankMean = Arrays.asList(list.get(3).split(","));
+                actionBankMean = Arrays.asList(new String(list.get(3).getBytes(),"utf-8").split(","));
                 skyBlue = list.get(4);
+                agentID = Arrays.asList(list.get(5).split(","));
+                agentName = Arrays.asList(new String(list.get(6).getBytes(),"utf-8").split(","));
+                type = list.get(7);
                 try {
                     buff.close();
                     fr.close();
@@ -72,8 +84,10 @@ public class ConverForVoiceMultipleInCall {
 
             }
 
+            //逐行读取日志文件
             while ((lineTxt = br.readLine()) != null) {
                 if (!"".equals(lineTxt)) {
+                    //通过正则表达式进行匹配
                     Matcher match = pattern.matcher(lineTxt);
                     String matchText = "";
                     while (match.find()) {
@@ -81,28 +95,39 @@ public class ConverForVoiceMultipleInCall {
                     }
                     //转换为JSON字段
                     JSONObject perLineJsonObject = JSON.parseObject(matchText);
+                    //声明需要使用到的变量
+                    //欢迎语
                     String welcome = "";
+                    //用户输入的文本
                     String query_text = "";
+                    //回复文本
                     String suggest_answer = "";
+                    //进入的顶层节点名称
                     String enter_top_node_name = "";
+                    //每一次会话的id
                     String session_id = "";
+                    //工行IVR传递过来手机号
                     String phoneNum = "";
+                    //会话类型
                     String source = "";
+                    //工行的IVR指令
                     String actionStr = "";
                     String actionId = "";
-                    //用户按键输入身份证号和卡号
+                    //工行IVR传递过来的 用户按键输入身份证号和卡号
                     String CardNOAndIDNumber = "";
-                    //用户按键输入值
+                    //工行IVR传递过来的 用户按键输入值
                     String InputKeys = "";
-                    //标答 -- 标准问
+                    //标答 -- 标准问 -- 用户输出
                     String standardQuestion = "";
-                    //回复答案
+                    //回复答案 -- 用于输出
                     String responseAnswer = "";
                     //澄清 -- 建议问
                     String suggested_questions = "";
                     //agent_id
                     String agent_id = "";
 
+
+                    //-----------------从每次会话中取值---------------------
                     //取session_id
                     if (perLineJsonObject.containsKey("session_id")) {
                         session_id = (String) perLineJsonObject.get("session_id");
@@ -233,14 +258,62 @@ public class ConverForVoiceMultipleInCall {
                             if (answer != null && answer.containsKey("context")) {
                                 //取context域
                                 JSONObject context = answer.getJSONObject("context");
-//                                if (context != null && context.containsKey("InputKeys")) {
-//                                    //取用户按键输入的信息
-//                                    InputKeys = context.getString("InputKeys");
-////                                    System.out.println(InputKeys);
-//                                }
                                 if (context != null && context.containsKey("printKeys")) {
                                     //取用户按键输入的信息
                                     InputKeys = context.getString("printKeys");
+                                }
+                            }
+                        }
+                    }
+                    //printKeys -- 获取失败  ，通过  InputKeys 进行获取
+                    if(StringUtils.isEmpty(InputKeys)){
+                        if ("task_based".equals(source)) {
+                            if (perLineJsonObject.containsKey("answer")) {
+                                //取最外围answer
+                                JSONObject answer = perLineJsonObject.getJSONObject("answer");
+                                if (answer != null && answer.containsKey("context")) {
+                                    //取context域
+                                    JSONObject context = answer.getJSONObject("context");
+                                if (context != null && context.containsKey("InputKeys")) {
+                                    //取用户按键输入的信息
+                                    InputKeys = context.getString("InputKeys");
+                                }
+                                }
+                            }
+                        }
+                    }
+                    //InputKeys -- 获取失败 ，通过webhook中的printKeys取值  --前端 约定将工行IVR传递的指令赋值给 printKeys 变量
+                    if(StringUtils.isEmpty(InputKeys)){
+                        if ("task_based".equals(source)) {
+                            if (perLineJsonObject.containsKey("answer")) {
+                                //取最外围answer
+                                JSONObject answer = perLineJsonObject.getJSONObject("answer");
+                                if (answer != null && answer.containsKey("answer")) {
+                                    //取JSON数组
+                                    JSONArray answerArray = answer.getJSONArray("answer");
+                                    if (answerArray.size() > 0) {
+                                        //取单个answer
+                                        for (int ai = 0; ai < answerArray.size(); ai++) {
+                                            JSONObject perAnswer = answerArray.getJSONObject(ai);
+                                            if (perAnswer != null && perAnswer.containsKey("webhook_info")) {
+                                                if (perAnswer.get("webhook_info") != null) {
+                                                    JSONObject webhook_info = perAnswer.getJSONObject("webhook_info");
+                                                    if (webhook_info != null && webhook_info.containsKey("request")) {
+                                                        JSONObject request = webhook_info.getJSONObject("request");
+                                                        if (request != null && request.containsKey("context")) {
+                                                            JSONObject context = request.getJSONObject("context");
+                                                            if (context != null && context.containsKey("printKeys")) {
+                                                                String printKeys = context.getString("printKeys");
+                                                                if(!StringUtils.isEmpty(printKeys)){
+                                                                    InputKeys = printKeys;
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -276,7 +349,9 @@ public class ConverForVoiceMultipleInCall {
                             }
                         }
                     }
-                    //-----------------设值---------------------
+
+
+                    //-----------------给变量进行设值---------------------
                     Conversation conversation = new Conversation();
                     //设置session_id
                     conversation.setSession_id(session_id);
@@ -288,13 +363,14 @@ public class ConverForVoiceMultipleInCall {
                     conversation.setTime(perLineJsonObject.getString("answer_time"));
                     //设置场景名
                     if(!StringUtils.isEmpty(agent_id)){
-                        if(agent_id.equals("38f7f7a0-b321-40e2-bb21-a6939124b02a")){
-                            enter_top_node_name = "外呼_账单分期";
-//                            System.out.println(enter_top_node_name);
-                        }
-                        if(agent_id.equals("72653e5f-25ce-4cb2-91dc-7b52113f8592")){
-                            enter_top_node_name = "外呼_信用卡催收";
-//                            System.out.println(enter_top_node_name);
+//                        if(agent_id.equals("38f7f7a0-b321-40e2-bb21-a6939124b02a")){
+//                            enter_top_node_name = "外呼_账单分期";
+//                        }
+//                        if(agent_id.equals("72653e5f-25ce-4cb2-91dc-7b52113f8592")){
+//                            enter_top_node_name = "外呼_信用卡催收";
+//                        }
+                        if(agentID.contains(actionId)){
+                            enter_top_node_name = agentName.get(agentID.indexOf(agent_id));
                         }
                     }
                     conversation.setEnter_top_node_name(enter_top_node_name);
@@ -361,7 +437,6 @@ public class ConverForVoiceMultipleInCall {
                         }
 
                     }
-                    CardNOAndIDNumber = "";
                     conversation.setSource(source);
 
 
@@ -402,7 +477,6 @@ public class ConverForVoiceMultipleInCall {
                 Collections.reverse(childList);
                 conversationSortList.addAll(childList);
                 childList.clear();
-
             }
             Collections.reverse(conversationSortList);
 
@@ -440,7 +514,7 @@ public class ConverForVoiceMultipleInCall {
             //新建表头
             XSSFSheet sheet = workbook.createSheet();
             XSSFRow row = sheet.createRow(0);
-
+            //设置列宽
             sheet.setColumnWidth(0, 7 * 256);
             sheet.setColumnWidth(1, 38 * 256);
             sheet.setColumnWidth(2, 15 * 256);
@@ -451,8 +525,7 @@ public class ConverForVoiceMultipleInCall {
             sheet.setColumnWidth(7, 30 * 256);
             sheet.setColumnWidth(8, 20 * 256);
             sheet.setColumnWidth(9, 20 * 256);
-
-
+            //设置表头
             row.createCell(0).setCellValue("序号");
             row.createCell(1).setCellValue("ID");
             row.createCell(2).setCellValue("电话号码");
@@ -463,6 +536,7 @@ public class ConverForVoiceMultipleInCall {
             row.createCell(7).setCellValue("触发IVR指令");
             row.createCell(8).setCellValue("返回结果类型");
             row.createCell(9).setCellValue("触发的标准问或建议问");
+            //设置表头样式
             for (int i = 0; i < 10; i++) {
                 if(row.getCell(i) != null){
                     row.getCell(i).setCellStyle(headStyle);
@@ -489,8 +563,6 @@ public class ConverForVoiceMultipleInCall {
 
             for (int ci = 0; ci < conversationSortList.size(); ci++) {
                 Conversation conversation = conversationSortList.get(ci);
-//            }
-//            for (Conversation conversation : conversationSortList) {
                 if(true){
                     //移除欢迎语对话 -- 询问字段问空
 //                    if(!StringUtils.isEmpty(conversation.getQuery_text())){
@@ -510,7 +582,6 @@ public class ConverForVoiceMultipleInCall {
                             //进入新的对话 设置标识
                             newTalk = true;
                             //开启新会话 -- 合并上一次会话 -- 合并序号列单元格
-                            //System.out.println((rowNum - 1) +" "+ outSerialNo + " " +talkFromNum+ " " +talkEndNum);
                             if((talkEndNum - talkFromNum) > 0){
                                 sheet.addMergedRegion(new CellRangeAddress(talkFromNum, talkEndNum, 0, 0));
                                 sheet.addMergedRegion(new CellRangeAddress(talkFromNum, talkEndNum, 1, 1));
