@@ -13,10 +13,8 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.util.StringUtils;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
+import java.text.SimpleDateFormat;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -46,143 +44,144 @@ public class ConverForVoiceMultiple {
                     }
                     //转换为JSON字段
                     JSONObject perLineJsonObject = JSON.parseObject(matchText);
-                    String welcome = "";
-                    String query_text = "";
-                    String suggest_answer = "";
-                    String enter_top_node_name = "";
-                    String session_id = "";
-                    String phoneNum = "";
-                    String source = "";
+                    String botId= "";
+                    String sessionId= "";
+                    String queryTime= "";
+                    String answerTime= "";
+                    String queryText= "";
+                    String channel= "";
+                    Boolean solved= false;
+                    Boolean firstDialogTurn= false;
+                    String source= "";
+                    String intentName= "";
+                    String userId= "";
+                    String dialog_node_name= "";
+                    String extendQuestion= "";
                     //标答 -- 标准问
                     String standardQuestion = "";
                     //回复答案
                     String responseAnswer = "";
                     //澄清 -- 建议问
-                    String suggested_questions = "";
+                    String suggestAnswer = "";
+                    String welcome = "";
 
-                    //取session_id
-                    if (perLineJsonObject.containsKey("session_id")) {
-                        session_id = (String) perLineJsonObject.get("session_id");
-                    }
-                    //取电话号码
-                    if (perLineJsonObject.containsKey("channel")) {
-                        String phoneNumStr = ((String) perLineJsonObject.get("channel"));
-                        if(!StringUtils.isEmpty(phoneNumStr) && phoneNumStr.length() >= 7){
-                            phoneNum = phoneNumStr.replace("IVRGIL-","");
-                        }else {
-                            phoneNum = phoneNumStr;
-                        }
-                    }
-                    //取欢迎语
                     if (perLineJsonObject.containsKey("welcome")) {
-                        welcome = perLineJsonObject.getString("welcome");
+                        welcome = (String) perLineJsonObject.get("welcome");
+                    }
+                    //botId
+                    if (perLineJsonObject.containsKey("botId")) {
+                        botId = (String) perLineJsonObject.get("botId");
+                    }
+                    //取sessionId
+                    if (perLineJsonObject.containsKey("sessionId")) {
+                        sessionId = (String) perLineJsonObject.get("sessionId");
+                    }
+                    //取询问时间
+                    if (perLineJsonObject.containsKey("queryTime")) {
+                        queryTime = perLineJsonObject.getString("queryTime");
+                    }
+                    //取回答时间
+                    if (perLineJsonObject.containsKey("answerTime")) {
+                        answerTime = perLineJsonObject.getString("answerTime");
                     }
                     //取询问问法
-                    if (perLineJsonObject.containsKey("query_text")) {
-                        query_text = perLineJsonObject.getString("query_text");
+                    if (perLineJsonObject.containsKey("queryText")) {
+                        queryText = perLineJsonObject.getString("queryText");
+                    }
+                    //取渠道
+                    if (perLineJsonObject.containsKey("channel")) {
+                        channel = ((String) perLineJsonObject.get("channel"));
+                    }
+                    //取渠道
+                    if (perLineJsonObject.containsKey("solved")) {
+                        solved = ((Boolean) perLineJsonObject.get("solved"));
+                    }
+                    //取渠道
+                    if (perLineJsonObject.containsKey("firstDialogTurn")) {
+                        firstDialogTurn = ((Boolean) perLineJsonObject.get("firstDialogTurn"));
                     }
                     //取建议回答
-                    if (perLineJsonObject.containsKey("suggest_answer")) {
-                        suggest_answer = perLineJsonObject.getString("suggest_answer");
-                    }
-                    //取命中标准问
-                    if (perLineJsonObject.containsKey("answer")) {
-                        JSONObject answer = perLineJsonObject.getJSONObject("answer");
-                        if(answer!= null && answer.containsKey("standardQuestion")){
-                            standardQuestion = answer.getString("standardQuestion");
-                        }
-                    }
-
-                    //命中澄清 --- 取建议问 -- 没有回复
-                    if (perLineJsonObject.containsKey("confirm_questions")) {
-                        //澄清 -- 建议问题们
-                        JSONArray confirm_questions = perLineJsonObject.getJSONArray("confirm_questions");
-                        for (int i = 0; i < confirm_questions.size(); i++) {
-                            if(i == 0){
-                                suggested_questions += ((JSONObject)confirm_questions.get(i)).getString("question");
-                            }else {
-                                suggested_questions += "、" + ((JSONObject)confirm_questions.get(i)).getString("question");
-                            }
-                        }
-
-                    }
-                    //取场景名
-                    if (perLineJsonObject.containsKey("enter_top_node_name")) {
-                        enter_top_node_name = perLineJsonObject.getString("enter_top_node_name").trim().replaceAll(" ","");
+                    if (perLineJsonObject.containsKey("suggestAnswer")) {
+                        suggestAnswer = perLineJsonObject.getString("suggestAnswer");
                     }
                     //取回复类型
                     if (perLineJsonObject.containsKey("source")) {
                         source = perLineJsonObject.getString("source");
                     }
+                    //
+                    if (perLineJsonObject.containsKey("intentName")) {
+                        source = perLineJsonObject.getString("intentName");
+                    }
+                    //
+                    if (perLineJsonObject.containsKey("ext")) {
+                        JSONObject ext = perLineJsonObject.getJSONObject("ext");
+                        if (ext.containsKey("userId")) {
+                            userId = ext.getString("userId");
+                        }
+                    }
+                    //
+                    if (perLineJsonObject.containsKey("dialog_node_name")) {
+                        dialog_node_name = perLineJsonObject.getString("dialog_node_name");
+                    }
+                    //
+                    if (perLineJsonObject.containsKey("answer")) {
+                        JSONObject answer = perLineJsonObject.getJSONObject("answer");
+                        if (answer.containsKey("faq")) {
+                            JSONObject faq = perLineJsonObject.getJSONObject("answer");
+                            if (faq.containsKey("standardQuestion")) {
+                                standardQuestion = perLineJsonObject.getString("standardQuestion");
+                            }
+                            if (faq.containsKey("extendQuestion")) {
+                                extendQuestion = perLineJsonObject.getString("extendQuestion");
+                            }
+                        }
+                    }
 
                     //-----------------设值---------------------
                     Conversation conversation = new Conversation();
-                    //设置session_id
-                    conversation.setSession_id(session_id);
-                    //设置电话号码
-                    conversation.setPhoneNum(phoneNum);
-                    //欢迎语
                     conversation.setWelcome(welcome);
-                    //设置时间
-                    conversation.setTime(perLineJsonObject.getString("answer_time"));
-                    //设置场景名
-                    conversation.setEnter_top_node_name(enter_top_node_name);
-                    //设置询问问法
-                    conversation.setQuery_text(query_text);
-
-                    //设置触发的标准问或者建议问
-                    if(!StringUtils.isEmpty(suggest_answer)){
-                        //非澄清 -- 返回命中标准问
-                        conversation.setStandardQuestion(standardQuestion);
-                    }else if(!StringUtils.isEmpty(suggested_questions)){
-                        //澄清 -- 返回空答案
-                        conversation.setStandardQuestion(suggested_questions);
-                    }
-
-                    //设置回答字段 -- 区别澄清问答
-                    if(!StringUtils.isEmpty(suggest_answer)){
-                        //非澄清 -- 返回建议回答
-                        conversation.setResponseAnswer(suggest_answer);
-                    }else if(!StringUtils.isEmpty(suggested_questions)){
-                        //澄清 -- 返回空答案
-                        conversation.setResponseAnswer("");
-                    }
-
-                    //转换回复类型
-                    if(!StringUtils.isEmpty(source)){
-                        if("task_based".equals(source)){
-                            source = "多轮会话";
-                        }
-                        if("faq".equals(source)){
-                            source = "标准回复";
-                        }
-                        if("chitchat".equals(source)){
-                            source = "闲聊";
-                        }
-                        if("clarity".equals(source)){
-                            source = "建议问";
-                        }
-                        if("none".equals(source)){
-                            //子回复类型  -- 建议问 -- 默认回复
-                            if(!StringUtils.isEmpty(suggested_questions)){
-                                source = "建议问";
-                            }else {
-                                source = "默认回复";
-                            }
-
-                        }
-
-                    }
+                    conversation.setBotId(botId);
+                    //设置sessionId
+                    conversation.setSessionId(sessionId);
+                    //
+                    SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                    Date dateQueryTime = new Date();
+                    dateQueryTime.setTime(Long.valueOf(queryTime));
+                    conversation.setQueryTime(formatter.format(dateQueryTime));
+                    Date dateAnswerTime = new Date();
+                    dateAnswerTime.setTime(Long.valueOf(answerTime));
+                    conversation.setAnswerTime(formatter.format(dateAnswerTime));
+                    //
+                    conversation.setQueryText(queryText);
+                    //
+                    conversation.setChannel(channel);
+                    //
+                    conversation.setSolved(solved);
+                    //
+                    conversation.setFirstDialogTurn(firstDialogTurn);
+                    //
+                    conversation.setSuggestAnswer(suggestAnswer);
+                    //
                     conversation.setSource(source);
+                    //
+                    conversation.setIntentName(intentName);
+                    //
+                    conversation.setUserId(userId);
+                    //
+                    conversation.setDialogNodeName(dialog_node_name);
+                    //
+                    conversation.setStandardQuestion(standardQuestion);
+                    //
+                    conversation.setExtendQuestion(extendQuestion);
 
                     //添加数组
                     conversationList.add(conversation);
                 }
             }
-            //根据session_id对list进行排序
+            //根据sessionId对list进行排序
             List<Conversation> conversationSortList = new ArrayList<>();
             Integer talkNumSort = 0;
-            String sessionIdSord = conversationList.get(0).getSession_id();
+            String sessionIdSord = conversationList.get(0).getSessionId();
             String sessionIdOther = "--";
             List<Conversation> childList = new ArrayList<>();
             //循环判断  ---  迁移 list
@@ -197,13 +196,13 @@ public class ConverForVoiceMultiple {
                     Conversation perConversation = iterator.next();
                     if(sessionIdSord != null){
                         //判断是否为同一个sessionID--添加childList
-                        if(sessionIdSord.equals(perConversation.getSession_id())){
+                        if(sessionIdSord.equals(perConversation.getSessionId())){
                             perConversation.setTalkNum(talkNumSort);
                             childList.add(perConversation);
                             iterator.remove();
                         }else {
                             //如果sessionID 不同， 保存另外的sessionID作为下次list迁移的判断条件
-                            sessionIdOther = perConversation.getSession_id();
+                            sessionIdOther = perConversation.getSessionId();
                             talkNumSort ++;
                         }
                     }
@@ -270,7 +269,7 @@ public class ConverForVoiceMultiple {
             int rowNum = 1;
             int outSerialNo = 1;
             int outPrintNum = 0;
-            String outSessionID = conversationSortList.get(0).getSession_id();
+            String outSessionID = conversationSortList.get(0).getSessionId();
             Boolean newTalk = true;
             //记录导出Excel中新会话的row起始结束 -- 合并序号
             Integer talkFromNum = 1;
@@ -279,19 +278,19 @@ public class ConverForVoiceMultiple {
 
             //填充一个空的Conversation用于合并最后一次会话
             Conversation tempConversation = new Conversation();
-            tempConversation.setQuery_text("--temp--for--merge--");
+            tempConversation.setQueryText("--temp--for--merge--");
             tempConversation.setEnter_top_node_name("--temp--for--merge--");
-            tempConversation.setSession_id("--temp--for--merge--");
+            tempConversation.setSessionId("--temp--for--merge--");
             conversationSortList.add(tempConversation);
 
             for (Conversation conversation : conversationSortList) {
                 if(true){
                     //移除欢迎语对话 -- 询问字段问空
-//                    if(!StringUtils.isEmpty(conversation.getQuery_text())){
+//                    if(!StringUtils.isEmpty(conversation.getQueryText())){
                     if(true){
-                        if(!outSessionID.equals(conversation.getSession_id())){
+                        if(!outSessionID.equals(conversation.getSessionId())){
                             outSerialNo ++;
-                            outSessionID = conversation.getSession_id();
+                            outSessionID = conversation.getSessionId();
                             //进入新的对话 设置标识
                             newTalk = true;
                             //开启新会话 -- 合并上一次会话 -- 合并序号列单元格
@@ -309,7 +308,7 @@ public class ConverForVoiceMultiple {
                         }
 
                         //判断是否为填充列
-                        if(!"--temp--for--merge--".equals(conversation.getQuery_text())){
+                        if(!"--temp--for--merge--".equals(conversation.getQueryText())){
                             //新增一行记录
                             XSSFRow currRow = sheet.createRow(rowNum++);
                             if(newTalk){
@@ -321,7 +320,7 @@ public class ConverForVoiceMultiple {
                             currRow.createCell(2).setCellValue(conversation.getPhoneNum());
                             currRow.createCell(3).setCellValue(conversation.getEnter_top_node_name());
                             currRow.createCell(4).setCellValue(conversation.getTime());
-                            currRow.createCell(5).setCellValue(conversation.getQuery_text());
+                            currRow.createCell(5).setCellValue(conversation.getQueryText());
                             currRow.createCell(6).setCellValue(conversation.getResponseAnswer());
                             currRow.createCell(7).setCellValue(conversation.getSource());
                             currRow.createCell(8).setCellValue(conversation.getStandardQuestion());
@@ -374,15 +373,25 @@ public class ConverForVoiceMultiple {
     }
     static class Conversation {
 
+        private String botId;
         private String welcome;
-        private String query_text;
-        private String suggest_answer;
+        private String queryText;
+        private String suggestAnswer;
         private String time;
+        private String queryTime;
+        private String answerTime;
+        private Boolean solved;
+        private Boolean firstDialogTurn;
+        private String intentName;
+        private String userId;
+        private String dialogNodeName;
+        private String extendQuestion;
         //顶层节点
         private String enter_top_node_name;
-        private String session_id;
+        private String sessionId;
         //回复类型
         private String source;
+        private String channel;
         private int talkNum;
         //澄清触发的建议问
         private String confirm_questions;
@@ -394,12 +403,12 @@ public class ConverForVoiceMultiple {
 
         private String phoneNum;
 
-        public String getSession_id() {
-            return session_id;
+        public String getSessionId() {
+            return sessionId;
         }
 
-        public void setSession_id(String session_id) {
-            this.session_id = session_id;
+        public void setSessionId(String sessionId) {
+            this.sessionId = sessionId;
         }
 
         public int getTalkNum() {
@@ -419,20 +428,20 @@ public class ConverForVoiceMultiple {
             this.welcome = welcome;
         }
 
-        public String getQuery_text() {
-            return query_text;
+        public String getQueryText() {
+            return queryText;
         }
 
-        public void setQuery_text(String query_text) {
-            this.query_text = query_text;
+        public void setQueryText(String queryText) {
+            this.queryText = queryText;
         }
 
         public String getSuggest_answer() {
-            return suggest_answer;
+            return suggestAnswer;
         }
 
-        public void setSuggest_answer(String suggest_answer) {
-            this.suggest_answer = suggest_answer;
+        public void setSuggest_answer(String suggestAnswer) {
+            this.suggestAnswer = suggestAnswer;
         }
 
         public String getTime() {
@@ -489,6 +498,94 @@ public class ConverForVoiceMultiple {
 
         public void setPhoneNum(String phoneNum) {
             this.phoneNum = phoneNum;
+        }
+
+        public String getQueryTime() {
+            return queryTime;
+        }
+
+        public void setQueryTime(String queryTime) {
+            this.queryTime = queryTime;
+        }
+
+        public String getAnswerTime() {
+            return answerTime;
+        }
+
+        public void setAnswerTime(String answerTime) {
+            this.answerTime = answerTime;
+        }
+
+        public Boolean getSolved() {
+            return solved;
+        }
+
+        public void setSolved(Boolean solved) {
+            this.solved = solved;
+        }
+
+        public Boolean getFirstDialogTurn() {
+            return firstDialogTurn;
+        }
+
+        public void setFirstDialogTurn(Boolean firstDialogTurn) {
+            this.firstDialogTurn = firstDialogTurn;
+        }
+
+        public String getIntentName() {
+            return intentName;
+        }
+
+        public void setIntentName(String intentName) {
+            this.intentName = intentName;
+        }
+
+        public String getUserId() {
+            return userId;
+        }
+
+        public void setUserId(String userId) {
+            this.userId = userId;
+        }
+
+        public String getDialogNodeName() {
+            return dialogNodeName;
+        }
+
+        public void setDialogNodeName(String dialogNodeName) {
+            this.dialogNodeName = dialogNodeName;
+        }
+
+        public String getExtendQuestion() {
+            return extendQuestion;
+        }
+
+        public void setExtendQuestion(String extendQuestion) {
+            this.extendQuestion = extendQuestion;
+        }
+
+        public String getBotId() {
+            return botId;
+        }
+
+        public void setBotId(String botId) {
+            this.botId = botId;
+        }
+
+        public String getSuggestAnswer() {
+            return suggestAnswer;
+        }
+
+        public void setSuggestAnswer(String suggestAnswer) {
+            this.suggestAnswer = suggestAnswer;
+        }
+
+        public String getChannel() {
+            return channel;
+        }
+
+        public void setChannel(String channel) {
+            this.channel = channel;
         }
     }
 
